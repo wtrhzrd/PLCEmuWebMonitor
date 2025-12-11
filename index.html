@@ -87,18 +87,33 @@
                         borderColor: '#00d2ff',
                         backgroundColor: 'rgba(0, 210, 255, 0.1)',
                         borderWidth: 2,
-                        tension: 0.2,
-                        fill: true
+                        tension: 0.1, // БЫЛО 0.4. Ставим 0.1 (почти прямая линия) — это убирает "петли"
+                        fill: true,
+                        spanGaps: true, // Рисовать линию, даже если данные чуть задержались
+                        pointRadius: 3, // Маленькие аккуратные точки
+                        pointHoverRadius: 5
                     }]
                 },
                 options: {
                     responsive: true,
-                    maintainAspectRatio: false, // Растягиваться на весь контейнер
+                    maintainAspectRatio: false,
+                    animation: false, // ВАЖНО: Отключаем анимацию полностью. Это уберет лаги.
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
                     scales: {
                         x: { display: false },
-                        y: { min: 0, max: 100, grid: { color: '#444' } }
+                        y: { 
+                            min: 0, 
+                            max: 100, 
+                            grid: { color: '#444' } 
+                        }
                     },
-                    plugins: { legend: { labels: { color: 'white' } } }
+                    plugins: { 
+                        legend: { labels: { color: 'white' } },
+                        tooltip: { enabled: true } // Подсказки при наведении оставим
+                    }
                 }
             });
         }
@@ -163,6 +178,7 @@
 </html>
 
     
+
 
 
 
