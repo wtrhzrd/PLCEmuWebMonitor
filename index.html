@@ -1,48 +1,62 @@
 <!DOCTYPE html>
-<html>
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Мониторинг значения с ПЛК</title>
+    <title>Мониторинг значений с ПЛК</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
-        body { font-family: sans-serif; background: #222; color: white; text-align: center; }
-        .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 30px; }
-        .card { background: #333; padding: 20px; border-radius: 10px; width: 200px; }
-        .value { font-size: 40px; font-weight: bold; color: #00d2ff; }
-        .label { color: #aaa; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; text-align: center; }
         
-        .btn {
-            margin-top: 40px;
-            padding: 15px 30px;
-            font-size: 24px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: 0.3s;
+        /* Сетка для карточек */
+        .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
+        
+        .card { 
+            background: #2d2d2d; padding: 20px; border-radius: 15px; width: 200px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
-        .btn-stop { background-color: #ff4444; color: white; }
-        .btn-start { background-color: #00C851; color: white; }
-        .btn:hover { opacity: 0.8; }
+        .value { font-size: 36px; font-weight: bold; color: #00d2ff; margin: 10px 0; }
+        .label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
         
-        .danger { color: #ff4444; }
+        /* Кнопка */
+        .btn {
+            margin-top: 30px; padding: 15px 40px; font-size: 18px; font-weight: bold;
+            border: none; border-radius: 50px; cursor: pointer; transition: 0.3s; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+        }
+        .btn-stop { background: linear-gradient(45deg, #ff4444, #cc0000); color: white; }
+        .btn-start { background: linear-gradient(45deg, #00C851, #007E33); color: white; }
+        .btn:hover { transform: scale(1.05); }
+
+        /* Контейнер для графика */
+        .chart-container {
+            width: 80%; max-width: 800px; margin: 40px auto; 
+            background: #2d2d2d; padding: 20px; border-radius: 15px;
+        }
+
+        .danger { color: #ff4444; text-shadow: 0 0 10px red; }
     </style>
 </head>
 <body>
 
-    <h1>ПАНЕЛЬ УПРАВЛЕНИЯ ЦЕХОМ</h1>
+    <h1 style="margin-top: 30px; color: #ccc;">СИСТЕМА МОНИТОРИНГА С ПЛК</h1>
 
     <div class="dashboard">
         <div class="card">
-            <div class="label">ТЕМПЕРАТУРА</div>
-            <div id="temp-display" class="value">--</div>
+            <div class="label">Температура</div>
+            <div id="temp-display" class="value">-- °C</div>
         </div>
         <div class="card">
-            <div class="label">ОБОРОТЫ</div>
-            <div id="rpm-display" class="value">--</div>
+            <div class="label">Обороты</div>
+            <div id="rpm-display" class="value">-- RPM</div>
         </div>
         <div class="card">
-            <div class="label">СОСТОЯНИЕ</div>
+            <div class="label">Статус</div>
             <div id="status-display" class="value" style="font-size: 20px">--</div>
         </div>
+    </div>
+
+    <div class="chart-container">
+        <canvas id="myChart"></canvas>
     </div>
 
     <button id="ctrl-btn" class="btn btn-stop" onclick="toggleMachine()">
@@ -50,37 +64,87 @@
     </button>
 
     <script>
+        // !!! ВСТАВЬ СВОЮ ССЫЛКУ СЮДА (слэш в конце!) !!!
         const baseUrl = "https://myfactorymonitor-default-rtdb.europe-west1.firebasedatabase.app/"; 
 
         let isMachineRunning = true;
 
-        async function updateData() {
-            let response = await fetch(baseUrl + "data.json");
-            let data = await response.json();
+        // --- НАСТРОЙКА ГРАФИКА ---
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const myChart = new Chart(ctx, {
+            type: 'line', // Линейный график
+            data: {
+                labels: [], // Тут будет время (ось X)
+                datasets: [{
+                    label: 'Температура двигателя (°C)',
+                    data: [], // Тут будут данные (ось Y)
+                    borderColor: '#00d2ff', // Цвет линии
+                    backgroundColor: 'rgba(0, 210, 255, 0.1)', // Заливка под графиком
+                    borderWidth: 2,
+                    tension: 0.4, // Плавность линий
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                animation: false, // Отключаем долгую анимацию для реального времени
+                scales: {
+                    x: { display: false }, // Скрываем подписи времени, чтобы не мусорить
+                    y: { min: 0, max: 100, grid: { color: '#444' } } // Шкала от 0 до 100
+                },
+                plugins: { legend: { labels: { color: 'white' } } }
+            }
+        });
 
-            if (data) {
-                document.getElementById('temp-display').innerText = data.temperature;
-                document.getElementById('rpm-display').innerText = data.rpm;
-                
-                let statusBox = document.getElementById('status-display');
-                statusBox.innerText = data.isAlarm;
-                
-                if (data.isAlarm === "ALARM!") statusBox.classList.add("danger");
-                else statusBox.classList.remove("danger");
+        // --- ОСНОВНАЯ ФУНКЦИЯ ---
+        async function updateData() {
+            try {
+                let response = await fetch(baseUrl + "data.json");
+                let data = await response.json();
+
+                if (data) {
+                    // 1. Обновляем цифры
+                    document.getElementById('temp-display').innerText = data.temperature + " °C";
+                    document.getElementById('rpm-display').innerText = data.rpm;
+                    
+                    let statusBox = document.getElementById('status-display');
+                    statusBox.innerText = data.isAlarm;
+                    
+                    if (data.isAlarm === "ALARM!") statusBox.className = "value danger";
+                    else statusBox.className = "value";
+
+                    // 2. Обновляем График (МАГИЯ ТУТ)
+                    const now = new Date().toLocaleTimeString(); // Текущее время
+                    
+                    // Добавляем новые данные в конец
+                    myChart.data.labels.push(now);
+                    myChart.data.datasets[0].data.push(data.temperature);
+
+                    // Если точек больше 20, удаляем самую старую (слева)
+                    if (myChart.data.labels.length > 20) {
+                        myChart.data.labels.shift();
+                        myChart.data.datasets[0].data.shift();
+                    }
+
+                    // Перерисовываем график
+                    myChart.update();
+                }
+            } catch (e) {
+                console.error("Ошибка:", e);
             }
         }
 
+        // --- УПРАВЛЕНИЕ ---
         async function toggleMachine() {
             isMachineRunning = !isMachineRunning;
-            
             const btn = document.getElementById('ctrl-btn');
-
+            
+            // Отправляем true/false (Firebase поймет)
             await fetch(baseUrl + "control.json", {
                 method: 'PUT',
                 body: JSON.stringify(isMachineRunning)
             });
 
-            // Меняем вид кнопки
             if (isMachineRunning) {
                 btn.innerText = "АВАРИЙНЫЙ СТОП";
                 btn.className = "btn btn-stop";
@@ -90,12 +154,13 @@
             }
         }
 
-
+        // Запуск
         setInterval(updateData, 1000);
         
+        // При старте страницы включаем кнопку в нужное положение (по умолчанию ВКЛ)
         fetch(baseUrl + "control.json", { method: 'PUT', body: 'true' });
-    </script>
 
+    </script>
 </body>
 </html>
 
