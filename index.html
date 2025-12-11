@@ -2,13 +2,13 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Мониторинг значений с ПЛК</title>
+    <title>Smart Factory Monitor</title>
+    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
 
     <style>
         body { font-family: 'Segoe UI', sans-serif; background: #1a1a1a; color: white; text-align: center; }
         
-        /* Сетка для карточек */
         .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 20px; }
         
         .card { 
@@ -16,29 +16,33 @@
             box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
         .value { font-size: 36px; font-weight: bold; color: #00d2ff; margin: 10px 0; }
-        .label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 1px; }
+        .label { color: #888; font-size: 14px; text-transform: uppercase; }
         
-        /* Кнопка */
         .btn {
             margin-top: 30px; padding: 15px 40px; font-size: 18px; font-weight: bold;
-            border: none; border-radius: 50px; cursor: pointer; transition: 0.3s; box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border: none; border-radius: 50px; cursor: pointer; transition: 0.3s;
         }
-        .btn-stop { background: linear-gradient(45deg, #ff4444, #cc0000); color: white; }
-        .btn-start { background: linear-gradient(45deg, #00C851, #007E33); color: white; }
-        .btn:hover { transform: scale(1.05); }
+        .btn-stop { background: #ff4444; color: white; }
+        .btn-start { background: #00C851; color: white; }
 
-        /* Контейнер для графика */
+        /* ВАЖНО: Задаем жесткую высоту контейнеру графика */
         .chart-container {
-            width: 80%; max-width: 800px; margin: 40px auto; 
-            background: #2d2d2d; padding: 20px; border-radius: 15px;
+            width: 80%; 
+            max-width: 800px; 
+            height: 400px; /* Фиксируем высоту */
+            margin: 40px auto; 
+            background: #2d2d2d; 
+            padding: 20px; 
+            border-radius: 15px;
+            position: relative; /* Важно для Chart.js */
         }
 
-        .danger { color: #ff4444; text-shadow: 0 0 10px red; }
+        .danger { color: #ff4444; }
     </style>
 </head>
 <body>
 
-    <h1 style="margin-top: 30px; color: #ccc;">СИСТЕМА МОНИТОРИНГА С ПЛК</h1>
+    <h1 style="margin-top: 30px; color: #ccc;">СИСТЕМА МОНИТОРИНГА ИНДУСТРИИ 4.0</h1>
 
     <div class="dashboard">
         <div class="card">
@@ -64,46 +68,47 @@
     </button>
 
     <script>
-        // !!! ВСТАВЬ СВОЮ ССЫЛКУ СЮДА (слэш в конце!) !!!
+        // !!! СЮДА СВОЮ ССЫЛКУ СО СЛЭШЕМ В КОНЦЕ !!!
         const baseUrl = "https://myfactorymonitor-default-rtdb.europe-west1.firebasedatabase.app/"; 
 
         let isMachineRunning = true;
+        let myChart = null; // Переменная для графика
 
-        // --- НАСТРОЙКА ГРАФИКА ---
-        const ctx = document.getElementById('myChart').getContext('2d');
-        const myChart = new Chart(ctx, {
-            type: 'line', // Линейный график
-            data: {
-                labels: [], // Тут будет время (ось X)
-                datasets: [{
-                    label: 'Температура двигателя (°C)',
-                    data: [], // Тут будут данные (ось Y)
-                    borderColor: '#00d2ff', // Цвет линии
-                    backgroundColor: 'rgba(0, 210, 255, 0.1)', // Заливка под графиком
-                    borderWidth: 2,
-                    tension: 0.4, // Плавность линий
-                    fill: true
-                }]
-            },
-            options: {
-                responsive: true,
-                animation: false, // Отключаем долгую анимацию для реального времени
-                scales: {
-                    x: { display: false }, // Скрываем подписи времени, чтобы не мусорить
-                    y: { min: 0, max: 100, grid: { color: '#444' } } // Шкала от 0 до 100
+        // Функция инициализации графика (запускается после загрузки страницы)
+        function initChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [{
+                        label: 'Температура (°C)',
+                        data: [],
+                        borderColor: '#00d2ff',
+                        backgroundColor: 'rgba(0, 210, 255, 0.1)',
+                        borderWidth: 2,
+                        tension: 0.4,
+                        fill: true
+                    }]
                 },
-                plugins: { legend: { labels: { color: 'white' } } }
-            }
-        });
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false, // Растягиваться на весь контейнер
+                    scales: {
+                        x: { display: false },
+                        y: { min: 0, max: 100, grid: { color: '#444' } }
+                    },
+                    plugins: { legend: { labels: { color: 'white' } } }
+                }
+            });
+        }
 
-        // --- ОСНОВНАЯ ФУНКЦИЯ ---
         async function updateData() {
             try {
                 let response = await fetch(baseUrl + "data.json");
                 let data = await response.json();
 
                 if (data) {
-                    // 1. Обновляем цифры
                     document.getElementById('temp-display').innerText = data.temperature + " °C";
                     document.getElementById('rpm-display').innerText = data.rpm;
                     
@@ -113,33 +118,28 @@
                     if (data.isAlarm === "ALARM!") statusBox.className = "value danger";
                     else statusBox.className = "value";
 
-                    // 2. Обновляем График (МАГИЯ ТУТ)
-                    const now = new Date().toLocaleTimeString(); // Текущее время
-                    
-                    // Добавляем новые данные в конец
-                    myChart.data.labels.push(now);
-                    myChart.data.datasets[0].data.push(data.temperature);
+                    // Обновляем график только если он уже создан
+                    if (myChart) {
+                        const now = new Date().toLocaleTimeString();
+                        myChart.data.labels.push(now);
+                        myChart.data.datasets[0].data.push(data.temperature);
 
-                    // Если точек больше 20, удаляем самую старую (слева)
-                    if (myChart.data.labels.length > 20) {
-                        myChart.data.labels.shift();
-                        myChart.data.datasets[0].data.shift();
+                        if (myChart.data.labels.length > 20) {
+                            myChart.data.labels.shift();
+                            myChart.data.datasets[0].data.shift();
+                        }
+                        myChart.update();
                     }
-
-                    // Перерисовываем график
-                    myChart.update();
                 }
             } catch (e) {
                 console.error("Ошибка:", e);
             }
         }
 
-        // --- УПРАВЛЕНИЕ ---
         async function toggleMachine() {
             isMachineRunning = !isMachineRunning;
             const btn = document.getElementById('ctrl-btn');
             
-            // Отправляем true/false (Firebase поймет)
             await fetch(baseUrl + "control.json", {
                 method: 'PUT',
                 body: JSON.stringify(isMachineRunning)
@@ -154,16 +154,15 @@
             }
         }
 
-        // Запуск
+        // Сначала создаем график, потом запускаем таймер
+        initChart();
         setInterval(updateData, 1000);
-        
-        // При старте страницы включаем кнопку в нужное положение (по умолчанию ВКЛ)
         fetch(baseUrl + "control.json", { method: 'PUT', body: 'true' });
-
     </script>
 </body>
 </html>
 
+    
 
 
 
