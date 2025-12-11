@@ -2,74 +2,101 @@
 <html>
 <head>
     <meta charset="UTF-8">
-    <title>Мониторинг Цеха</title>
+    <title>Мониторинг значения с ПЛК</title>
     <style>
         body { font-family: sans-serif; background: #222; color: white; text-align: center; }
-        .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 50px; }
+        .dashboard { display: flex; justify-content: center; gap: 20px; margin-top: 30px; }
         .card { background: #333; padding: 20px; border-radius: 10px; width: 200px; }
         .value { font-size: 40px; font-weight: bold; color: #00d2ff; }
         .label { color: #aaa; }
-        .danger { color: #ff4444; animation: blink 1s infinite; }
         
-        @keyframes blink { 50% { opacity: 0.5; } }
+        .btn {
+            margin-top: 40px;
+            padding: 15px 30px;
+            font-size: 24px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: 0.3s;
+        }
+        .btn-stop { background-color: #ff4444; color: white; }
+        .btn-start { background-color: #00C851; color: white; }
+        .btn:hover { opacity: 0.8; }
+        
+        .danger { color: #ff4444; }
     </style>
 </head>
 <body>
 
-    <h1>МОНИТОРИНГ ВИРТУАЛЬНОГО ПЛК</h1>
+    <h1>ПАНЕЛЬ УПРАВЛЕНИЯ ЦЕХОМ</h1>
 
     <div class="dashboard">
         <div class="card">
-            <div class="label">ТЕМПЕРАТУРА (°C)</div>
+            <div class="label">ТЕМПЕРАТУРА</div>
             <div id="temp-display" class="value">--</div>
         </div>
-
         <div class="card">
-            <div class="label">ОБОРОТЫ (RPM)</div>
+            <div class="label">ОБОРОТЫ</div>
             <div id="rpm-display" class="value">--</div>
         </div>
-        
         <div class="card">
-            <div class="label">СТАТУС</div>
+            <div class="label">СОСТОЯНИЕ</div>
             <div id="status-display" class="value" style="font-size: 20px">--</div>
         </div>
     </div>
 
-    <script>
-        // ! ВСТАВЬ ТУ ЖЕ ССЫЛКУ, ЧТО И В C# !
-        const url = "https://myfactorymonitor-default-rtdb.europe-west1.firebasedatabase.app/data.json";
+    <button id="ctrl-btn" class="btn btn-stop" onclick="toggleMachine()">
+        АВАРИЙНЫЙ СТОП
+    </button>
 
-        // Функция, которая ходит за данными
+    <script>
+        const baseUrl = "https://myfactorymonitor-default-rtdb.europe-west1.firebasedatabase.app/data.json"; 
+
+        let isMachineRunning = true;
+
         async function updateData() {
-            // 1. Стучимся в базу данных (fetch - это "принеси")
-            let response = await fetch(url);
-            
-            // 2. Превращаем ответ обратно в понятный объект
+            let response = await fetch(baseUrl + "data.json");
             let data = await response.json();
 
             if (data) {
-                // 3. Находим элементы на экране и меняем им текст
                 document.getElementById('temp-display').innerText = data.temperature;
                 document.getElementById('rpm-display').innerText = data.rpm;
                 
                 let statusBox = document.getElementById('status-display');
                 statusBox.innerText = data.isAlarm;
-
-                // Если Авария - красим текст в красный
-                if (data.isAlarm === "ALARM!") {
-                    statusBox.classList.add("danger");
-                } else {
-                    statusBox.classList.remove("danger");
-                }
+                
+                if (data.isAlarm === "ALARM!") statusBox.classList.add("danger");
+                else statusBox.classList.remove("danger");
             }
         }
 
-        // Запускать функцию updateData каждые 1000 миллисекунд (1 сек)
+        async function toggleMachine() {
+            isMachineRunning = !isMachineRunning;
+            
+            const btn = document.getElementById('ctrl-btn');
+
+            await fetch(baseUrl + "control.json", {
+                method: 'PUT',
+                body: JSON.stringify(isMachineRunning)
+            });
+
+            // Меняем вид кнопки
+            if (isMachineRunning) {
+                btn.innerText = "АВАРИЙНЫЙ СТОП";
+                btn.className = "btn btn-stop";
+            } else {
+                btn.innerText = "ЗАПУСТИТЬ ОБОРУДОВАНИЕ";
+                btn.className = "btn btn-start";
+            }
+        }
+
+
         setInterval(updateData, 1000);
+        
+        fetch(baseUrl + "control.json", { method: 'PUT', body: 'true' });
     </script>
 
 </body>
-
 </html>
 
 
